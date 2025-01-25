@@ -106,6 +106,9 @@ async function submitTransaction(transactionBytes: TransactionMessageBytes) {
     });
 
     const result = await response.json();
+    if (result.status === "error") {
+      throw Error(result.error)
+    }
     console.log("Transaction Result:", result);
     return result;
   } catch (error) {
