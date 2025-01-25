@@ -89,9 +89,24 @@ async fn handle_transaction(
         let attempt_start = Instant::now();
 
         match state
-            .tpu_client
-            .send_transaction_to_upcoming_leaders(request.txn.clone())
-            .await
+        .tpu_client
+        .send_transaction_to_upcoming_leaders(
+            // Decode from Base64
+            match base64::decode(&request.txn) {
+                Ok(decoded_txn) => {
+                    // Encode to Base58 (or bincode if needed)
+                    // let base58_txn = bs58::encode(&decoded_txn).into_string();
+                    // // If bincode is needed instead:
+                    // let bincode_txn = bincode::serialize(&base58_txn).unwrap();
+                    decoded_txn
+                }
+                Err(e) => {
+                    eprintln!("Failed to decode Base64 transaction: {}", e);
+                    vec![]
+                }
+            }
+        )
+        .await
         {
             Ok(_) => {
                 let total_time = start_time.elapsed();

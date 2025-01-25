@@ -1,12 +1,15 @@
 import {
   address,
   appendTransactionMessageInstructions,
+  Base64EncodedBytes,
+  Base64EncodedWireTransaction,
   createKeyPairSignerFromBytes,
   createSolanaRpc,
   createSolanaRpcSubscriptions,
   createTransactionMessage,
   FullySignedTransaction,
   getBase64EncodedWireTransaction,
+  getCompiledTransactionMessageEncoder,
   getSignatureFromTransaction,
   pipe,
   Rpc,
@@ -93,7 +96,7 @@ async function createAndSignTransaction() {
 }
 
 // Function to submit a transaction
-async function submitTransaction(transactionBytes: TransactionMessageBytes) {
+async function submitTransaction(transactionBytes: Base64EncodedWireTransaction) {
   try {
     const response = await fetch("http://localhost:3001/send_txn", {
       method: "POST",
@@ -101,11 +104,12 @@ async function submitTransaction(transactionBytes: TransactionMessageBytes) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        txn: Array.from(transactionBytes),
+        txn: Array.from(Buffer.from(transactionBytes)),
       }),
     });
-
+    console.log(response)
     const result = await response.json();
+
     if (result.status === "error") {
       throw Error(result.error)
     }
@@ -131,7 +135,7 @@ async function sendMultipleTransactions(count: number) {
 
   // Submit all transactions concurrently
   const submissionPromises = transactions.map(async (signedTransaction) => {
-    await submitTransaction(signedTransaction.messageBytes);
+    await submitTransaction(getBase64EncodedWireTransaction(signedTransaction));
     // await sendTransactionWithoutConfirmingFactory({ rpc: client.rpc })(
     //   signedTransaction,
     //   {
