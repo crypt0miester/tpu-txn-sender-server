@@ -60,6 +60,7 @@ where
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail
+    #[allow(dead_code)]
     pub async fn send_transaction_to_upcoming_leaders(
         &self,
         wire_transaction: Vec<u8>,

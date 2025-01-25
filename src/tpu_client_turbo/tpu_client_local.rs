@@ -260,7 +260,6 @@ pub struct TpuClient<
     connection_cache: Arc<ConnectionCache<P, M, C>>,
 }
 
-
 async fn send_wire_transaction_to_addr<P, M, C>(
     connection_cache: &ConnectionCache<P, M, C>,
     addr: &SocketAddr,
@@ -321,13 +320,12 @@ where
         &self,
         wire_transaction: Vec<u8>,
     ) -> TransportResult<()> {
-
         let leaders = self
             .leader_tpu_service
             .unique_leader_tpu_sockets(self.fanout_slots);
+
         for tpu_address in &leaders {
-            let cache = 
-            &self.connection_cache;
+            let cache = &self.connection_cache;
             let conn = cache.get_nonblocking_connection(tpu_address);
             conn.send_data(&wire_transaction).await?;
         }
@@ -374,9 +372,6 @@ where
                 std::io::Error::new(std::io::ErrorKind::Other, "No sends attempted").into()
             })
         } else {
-            info!(
-                "TRANSACTION SUCCESS"
-            );
             Ok(())
         }
     }

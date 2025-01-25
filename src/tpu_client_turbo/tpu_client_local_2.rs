@@ -114,7 +114,6 @@ where
             .tpu_client
             .get_leader_tpu_service()
             .unique_leader_tpu_sockets(self.tpu_client.get_fanout_slots());
-
         for tpu_address in &leaders {
             let cache = self.tpu_client.get_connection_cache();
             let conn = cache.get_connection(tpu_address);

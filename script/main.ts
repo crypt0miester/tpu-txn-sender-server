@@ -60,15 +60,15 @@ console.log("feePayer", feePayer.address);
 const destination = address(process.env.DESTINATION_ADDRESS || "2EGGxj2qbNAJNgLCPKca8sxZYetyTjnoRspTPjzN2D67");
 
 // Function to create and sign a transaction
-async function createAndSignTransaction() {
+async function createAndSignTransaction(index: number) {
   const latestBlockhash = await client.rpc.getLatestBlockhash().send();
 
   const setComputeUnit = getSetComputeUnitLimitInstruction({ units: 1_000 });
   const setComputeUnitPrice = getSetComputeUnitPriceInstruction({
-    microLamports: 100_000,
+    microLamports: 10_000,
   });
   const setAccountDataLimitSize = getSetLoadedAccountsDataSizeLimitInstruction({
-    accountDataSizeLimit: 5_000,
+    accountDataSizeLimit: 1_000,
   });
 
   const transactionMessage = pipe(
@@ -85,7 +85,7 @@ async function createAndSignTransaction() {
           getTransferSolInstruction({
             source: feePayer,
             destination,
-            amount: 1_000, // Amount in lamports
+            amount: 1_000 + index, // Amount in lamports
           }),
         ],
         tx,
@@ -107,7 +107,7 @@ async function submitTransaction(transactionBytes: Base64EncodedWireTransaction)
         txn: Array.from(Buffer.from(transactionBytes)),
       }),
     });
-    console.log(response)
+    // console.log(response)
     const result = await response.json();
 
     if (result.status === "error") {
@@ -129,7 +129,7 @@ async function sendMultipleTransactions(count: number) {
 
   // Create and sign multiple transactions
   for (let i = 0; i < count; i++) {
-    const signedTransaction = await createAndSignTransaction();
+    const signedTransaction = await createAndSignTransaction(i);
     transactions.push(signedTransaction);
   }
 
@@ -143,20 +143,21 @@ async function sendMultipleTransactions(count: number) {
     //   },
     // );
     const signature = getSignatureFromTransaction(signedTransaction);
-    console.log("Transaction Signature:", signature);
-    console.log("https://solscan.io/tx/" + signature);
+    console.log("Transaction Signature: https://solscan.io/tx/" + signature);
 
     // Wait for confirmation
     const getBlockHeightExceedencePromise =
       createBlockHeightExceedencePromiseFactory(client);
     const getRecentSignatureConfirmationPromise =
       createRecentSignatureConfirmationPromiseFactory(client);
+
     await waitForRecentTransactionConfirmation({
       commitment: "confirmed",
       getBlockHeightExceedencePromise,
       getRecentSignatureConfirmationPromise,
       transaction: signedTransaction,
     });
+    console.log("txn confirmed");
   });
 
   // Wait for all transactions to complete
@@ -165,7 +166,7 @@ async function sendMultipleTransactions(count: number) {
 
 // Main function
 async function main() {
-  const numberOfTransactions = 10; // Number of transactions to send
+  const numberOfTransactions = 1; // Number of transactions to send
   await sendMultipleTransactions(numberOfTransactions);
   console.log("All transactions submitted successfully!");
 }

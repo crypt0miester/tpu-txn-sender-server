@@ -91,7 +91,7 @@ async fn handle_transaction(
 
         match state
             .tpu_client
-            .send_transaction_to_upcoming_leaders(
+            .try_send_wire_transaction(
                 match general_purpose::STANDARD.decode(&request.txn) {
                     Ok(decoded_txn) => decoded_txn,
                     Err(e) => {
