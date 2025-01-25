@@ -13,7 +13,7 @@ use std::{sync::Arc, time::Duration};
 use tower_http::trace::TraceLayer;
 use tracing::{error, info, warn};
 mod tpu_client_turbo;
-use tpu_client_turbo::tpu_client_raw_2::TpuClientConfig;
+use tpu_client_turbo::tpu_client_local_2::TpuClientConfig;
 use tpu_client_turbo::TpuClient;
 
 struct AppState {
@@ -27,6 +27,8 @@ struct TransactionRequest {
 
 #[tokio::main]
 async fn main() {
+    dotenv::dotenv().ok();
+
     tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::time())
         .with_target(false)
@@ -36,15 +38,15 @@ async fn main() {
         .with_line_number(true)
         .init();
 
-    let rpc_url = "https://"; 
-    let ws_url = "wss://"; 
+    let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set");
+    let ws_url = std::env::var("WS_URL").expect("WS_URL must be set");
 
     let rpc_client = Arc::new(solana_client::nonblocking::rpc_client::RpcClient::new(
         rpc_url.to_string(),
     ));
 
     let config = TpuClientConfig::default();
-    let tpu_client = TpuClient::new("tpu", rpc_client, ws_url, config)
+    let tpu_client = TpuClient::new("tpu", rpc_client, &ws_url, config)
         .await
         .expect("Failed to create TPU client");
 
@@ -94,14 +96,14 @@ async fn handle_transaction(
             Ok(_) => {
                 let total_time = start_time.elapsed();
                 info!(
-                    total_time_us = total_time.as_millis(),
+                    total_time_ms = total_time.as_millis(),
                     successful_attempt = attempt,
                     "Transaction processed successfully after retries"
                 );
                 return Json(TransactionResponse {
                     status: "success".to_string(),
                     error: None,
-                    processing_time_us: total_time.as_micros() as u64,
+                    processing_time_ms: total_time.as_millis() as u64,
                     attempts: attempt,
                 })
                 .into_response();
@@ -111,7 +113,7 @@ async fn handle_transaction(
                 warn!(
                     error = ?err,
                     attempt = attempt,
-                    attempt_time_us = attempt_time.as_micros(),
+                    attempt_time_ms = attempt_time.as_millis(),
                     "Transaction attempt failed, retrying"
                 );
                 last_error = Some(err);
@@ -130,7 +132,7 @@ async fn handle_transaction(
     let total_time = start_time.elapsed();
     error!(
         error = ?last_error,
-        total_time_us = total_time.as_micros(),
+        total_time_ms = total_time.as_millis(),
         attempts = attempt,
         "All retry attempts failed"
     );
@@ -140,7 +142,7 @@ async fn handle_transaction(
         Json(TransactionResponse {
             status: "error".to_string(),
             error: last_error.map(|e| e.to_string()),
-            processing_time_us: total_time.as_micros() as u64,
+            processing_time_ms: total_time.as_millis() as u64,
             attempts: attempt,
         }),
     )
@@ -151,7 +153,7 @@ async fn handle_transaction(
 struct TransactionResponse {
     status: String,
     error: Option<String>,
-    processing_time_us: u64,
+    processing_time_ms: u64,
     attempts: u32,
 }
 

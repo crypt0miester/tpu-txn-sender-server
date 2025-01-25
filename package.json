@@ -1,0 +1,14 @@
+{
+    "version": "0.0.1",
+    "main": "index.js",
+    "dependencies": {
+        "@solana-program/compute-budget": "^0.6.1",
+        "@solana-program/system": "^0.6.2",
+        "@solana/web3.js": "2",
+        "dotenv": "^16.4.7"
+    },
+    "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "prettier": "3.4.2"
+    }
+}

@@ -21,6 +21,7 @@ use {
 };
 
 const DEFAULT_CONNECTION_POOL_SIZE: usize = 4;
+#[allow(dead_code)]
 const DEFAULT_CONNECTION_CACHE_USE_QUIC: bool = true;
 
 /// A thin wrapper over connection-cache/ConnectionCache to ease
@@ -33,10 +34,12 @@ pub enum ConnectionCache {
 type QuicBaseClientConnection = <QuicPool as ConnectionPool>::BaseClientConnection;
 
 pub enum BlockingClientConnection {
+    #[allow(dead_code)]
     Quic(Arc<<QuicBaseClientConnection as BaseClientConnection>::BlockingClientConnection>),
 }
 
 pub enum NonblockingClientConnection {
+    #[allow(dead_code)]
     Quic(Arc<<QuicBaseClientConnection as BaseClientConnection>::NonblockingClientConnection>),
 }
 
@@ -61,6 +64,7 @@ impl ConnectionCache {
     }
 
     /// Create a quic connection_cache
+    #[allow(dead_code)]
     pub fn new_quic(name: &'static str, connection_pool_size: usize) -> Self {
         Self::new_with_client_options(name, connection_pool_size, None, None, None)
     }
@@ -92,22 +96,26 @@ impl ConnectionCache {
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn protocol(&self) -> Protocol {
         match self {
             Self::Quic(_) => Protocol::QUIC,
         }
     }
 
+    #[allow(dead_code)]
     pub fn use_quic(&self) -> bool {
         matches!(self, Self::Quic(_))
     }
 
+    #[allow(dead_code)]
     pub fn get_connection(&self, addr: &SocketAddr) -> BlockingClientConnection {
         match self {
             Self::Quic(cache) => BlockingClientConnection::Quic(cache.get_connection(addr)),
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_nonblocking_connection(&self, addr: &SocketAddr) -> NonblockingClientConnection {
         match self {
             Self::Quic(cache) => {

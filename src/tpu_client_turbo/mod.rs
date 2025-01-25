@@ -1,13 +1,9 @@
 pub use connection_cache::ConnectionCache;
-use tpu_client_raw::TpuClient as BackendTpuClient;
-use tpu_client_raw_2::{Result, TpuClientConfig};
+use tpu_client_local::TpuClient as BackendTpuClient;
+use tpu_client_local_2::{Result, TpuClientConfig};
 pub mod connection_cache;
-pub mod tpu_client_raw;
-pub mod tpu_client_raw_2;
-pub use connection_cache::*;
-pub use tpu_client_raw::*;
-pub use tpu_client_raw_2::*;
-// mod tpu_client_non_blocking;
+pub mod tpu_client_local;
+pub mod tpu_client_local_2;
 use {
     solana_connection_cache::connection_cache::{
         ConnectionCache as BackendConnectionCache, ConnectionManager, ConnectionPool,
@@ -16,9 +12,7 @@ use {
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
     solana_rpc_client::nonblocking::rpc_client::RpcClient,
     solana_sdk::{
-        message::Message,
-        signers::Signers,
-        transaction::{Transaction, TransactionError},
+        transaction::Transaction,
         transport::Result as TransportResult,
     },
     std::sync::Arc,
@@ -42,11 +36,13 @@ where
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
+    #[allow(dead_code)]
     pub async fn send_transaction(&self, transaction: &Transaction) -> bool {
         self.tpu_client.send_transaction(transaction).await
     }
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
+    #[allow(dead_code)]
     pub async fn send_wire_transaction(&self, wire_transaction: Vec<u8>) -> bool {
         self.tpu_client
             .send_wire_transaction(wire_transaction)
@@ -56,6 +52,7 @@ where
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
     /// Returns the last error if all sends fail
+    #[allow(dead_code)]
     pub async fn try_send_transaction(&self, transaction: &Transaction) -> TransportResult<()> {
         self.tpu_client.try_send_transaction(transaction).await
     }
@@ -74,6 +71,7 @@ where
     /// Send a batch of wire transactions to the current and upcoming leader TPUs according to
     /// fanout size
     /// Returns the last error if all sends fail
+    #[allow(dead_code)]
     pub async fn try_send_wire_transaction_batch(
         &self,
         wire_transactions: Vec<Vec<u8>>,
@@ -124,10 +122,12 @@ where
         })
     }
 
+    #[allow(dead_code)]
     pub fn rpc_client(&self) -> &RpcClient {
         self.tpu_client.rpc_client()
     }
 
+    #[allow(dead_code)]
     pub async fn shutdown(&mut self) {
         self.tpu_client.shutdown().await
     }

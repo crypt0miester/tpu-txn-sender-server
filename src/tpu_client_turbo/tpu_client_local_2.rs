@@ -1,5 +1,5 @@
 use {
-    super::tpu_client_raw::{TpuClient as NonblockingTpuClient, TpuSenderError},
+    super::tpu_client_local::{TpuClient as NonblockingTpuClient, TpuSenderError},
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_connection_cache::{
         client_connection::ClientConnection,
@@ -21,28 +21,19 @@ use {
         sync::{Arc, RwLock},
     },
 };
-#[cfg(feature = "spinner")]
-use {
-    solana_sdk::{message::Message, signers::Signers, transaction::TransactionError},
-    tokio::time::Duration,
-};
 
+#[allow(dead_code)]
 pub const DEFAULT_TPU_ENABLE_UDP: bool = false;
+#[allow(dead_code)]
 pub const DEFAULT_TPU_USE_QUIC: bool = true;
 
 /// The default connection count is set to 1 -- it should
 /// be sufficient for most use cases. Validators can use
 /// --tpu-connection-pool-size to override this default value.
+#[allow(dead_code)]
 pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 1;
 
 pub type Result<T> = std::result::Result<T, TpuSenderError>;
-
-/// Send at ~100 TPS
-#[cfg(feature = "spinner")]
-pub(crate) const SEND_TRANSACTION_INTERVAL: Duration = Duration::from_millis(10);
-/// Retry batch send after 4 seconds
-#[cfg(feature = "spinner")]
-pub(crate) const TRANSACTION_RESEND_INTERVAL: Duration = Duration::from_secs(4);
 
 /// Default number of slots used to build TPU socket fanout set
 pub const DEFAULT_FANOUT_SLOTS: u64 = 64;
@@ -87,11 +78,13 @@ where
 {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
+    #[allow(dead_code)]
     pub fn send_transaction(&self, transaction: &Transaction) -> bool {
         self.invoke(self.tpu_client.send_transaction(transaction))
     }
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
+    #[allow(dead_code)]
     pub fn send_wire_transaction(&self, wire_transaction: Vec<u8>) -> bool {
         self.invoke(self.tpu_client.send_wire_transaction(wire_transaction))
     }
@@ -99,6 +92,7 @@ where
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
     /// Returns the last error if all sends fail
+    #[allow(dead_code)]
     pub fn try_send_transaction(&self, transaction: &Transaction) -> TransportResult<()> {
         self.invoke(self.tpu_client.try_send_transaction(transaction))
     }
@@ -108,6 +102,7 @@ where
     /// They both invoke the nonblocking TPUClient and both fail when calling "transfer_with_client()" multiple times
     /// I do not full understand WHY the nonblocking TPUClient fails in this specific case. But the method defined below
     /// does work although it has only been tested in LocalCluster integration tests
+    #[allow(dead_code)]
     pub fn send_transaction_to_upcoming_leaders(
         &self,
         transaction: &Transaction,
@@ -132,6 +127,7 @@ where
     /// Serialize and send a batch of transactions to the current and upcoming leader TPUs according
     /// to fanout size
     /// Returns the last error if all sends fail
+    #[allow(dead_code)]
     pub fn try_send_transaction_batch(&self, transactions: &[Transaction]) -> TransportResult<()> {
         let wire_transactions = transactions
             .into_par_iter()
@@ -145,6 +141,7 @@ where
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail
+    #[allow(dead_code)]
     pub fn try_send_wire_transaction(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
         self.invoke(self.tpu_client.try_send_wire_transaction(wire_transaction))
     }
@@ -160,6 +157,7 @@ where
     }
 
     /// Create a new client that disconnects when dropped
+    #[allow(dead_code)]
     pub fn new(
         name: &'static str,
         rpc_client: Arc<RpcClient>,
@@ -186,6 +184,7 @@ where
     }
 
     /// Create a new client that disconnects when dropped
+    #[allow(dead_code)]
     pub fn new_with_connection_cache(
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
@@ -209,18 +208,7 @@ where
         })
     }
 
-    #[cfg(feature = "spinner")]
-    pub fn send_and_confirm_messages_with_spinner<T: Signers + ?Sized>(
-        &self,
-        messages: &[Message],
-        signers: &T,
-    ) -> Result<Vec<Option<TransactionError>>> {
-        self.invoke(
-            self.tpu_client
-                .send_and_confirm_messages_with_spinner(messages, signers),
-        )
-    }
-
+    #[allow(dead_code)]
     pub fn rpc_client(&self) -> &RpcClient {
         &self.rpc_client
     }

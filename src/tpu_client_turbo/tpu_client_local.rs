@@ -1,5 +1,5 @@
 use {
-    super::tpu_client_raw_2::{RecentLeaderSlots, TpuClientConfig, MAX_FANOUT_SLOTS},
+    super::tpu_client_local_2::{RecentLeaderSlots, TpuClientConfig, MAX_FANOUT_SLOTS},
     bincode::serialize,
     futures_util::{future::join_all, stream::StreamExt},
     log::*,
@@ -42,16 +42,6 @@ use {
         task::JoinHandle,
         time::{sleep, timeout, Duration, Instant},
     },
-};
-#[cfg(feature = "spinner")]
-use {
-    crate::tpu_client::{SEND_TRANSACTION_INTERVAL, TRANSACTION_RESEND_INTERVAL},
-    futures_util::FutureExt,
-    indicatif::ProgressBar,
-    solana_rpc_client::spinner::{self, SendTransactionProgress},
-    solana_rpc_client_api::request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-    solana_sdk::{message::Message, signers::Signers, transaction::TransactionError},
-    std::{future::Future, iter},
 };
 
 #[derive(Error, Debug)]
@@ -270,101 +260,6 @@ pub struct TpuClient<
     connection_cache: Arc<ConnectionCache<P, M, C>>,
 }
 
-/// Helper function which generates futures to all be awaited together for maximum
-/// throughput
-#[cfg(feature = "spinner")]
-fn send_wire_transaction_futures<'a, P, M, C>(
-    progress_bar: &'a ProgressBar,
-    progress: &'a SendTransactionProgress,
-    index: usize,
-    num_transactions: usize,
-    wire_transaction: Vec<u8>,
-    leaders: Vec<SocketAddr>,
-    connection_cache: &'a ConnectionCache<P, M, C>,
-) -> Vec<impl Future<Output = TransportResult<()>> + 'a>
-where
-    P: ConnectionPool<NewConnectionConfig = C>,
-    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
-{
-    const SEND_TIMEOUT_INTERVAL: Duration = Duration::from_secs(5);
-    let sleep_duration = SEND_TRANSACTION_INTERVAL.saturating_mul(index as u32);
-    let send_timeout = SEND_TIMEOUT_INTERVAL.saturating_add(sleep_duration);
-    leaders
-        .into_iter()
-        .map(|addr| {
-            timeout_future(
-                send_timeout,
-                sleep_and_send_wire_transaction_to_addr(
-                    sleep_duration,
-                    connection_cache,
-                    addr,
-                    wire_transaction.clone(),
-                ),
-            )
-            .boxed_local() // required to make types work simply
-        })
-        .chain(iter::once(
-            timeout_future(
-                send_timeout,
-                sleep_and_set_message(
-                    sleep_duration,
-                    progress_bar,
-                    progress,
-                    index,
-                    num_transactions,
-                ),
-            )
-            .boxed_local(), // required to make types work simply
-        ))
-        .collect::<Vec<_>>()
-}
-
-// Wrap an existing future with a timeout.
-//
-// Useful for end-users who don't need a persistent connection to each validator,
-// and want to abort more quickly.
-#[cfg(feature = "spinner")]
-async fn timeout_future<Fut: Future<Output = TransportResult<()>>>(
-    timeout_duration: Duration,
-    future: Fut,
-) -> TransportResult<()> {
-    timeout(timeout_duration, future)
-        .await
-        .unwrap_or_else(|_| Err(TransportError::Custom("Timed out".to_string())))
-}
-
-#[cfg(feature = "spinner")]
-async fn sleep_and_set_message(
-    sleep_duration: Duration,
-    progress_bar: &ProgressBar,
-    progress: &SendTransactionProgress,
-    index: usize,
-    num_transactions: usize,
-) -> TransportResult<()> {
-    sleep(sleep_duration).await;
-    progress.set_message_for_confirmed_transactions(
-        progress_bar,
-        &format!("Sending {}/{} transactions", index + 1, num_transactions,),
-    );
-    Ok(())
-}
-
-#[cfg(feature = "spinner")]
-async fn sleep_and_send_wire_transaction_to_addr<P, M, C>(
-    sleep_duration: Duration,
-    connection_cache: &ConnectionCache<P, M, C>,
-    addr: SocketAddr,
-    wire_transaction: Vec<u8>,
-) -> TransportResult<()>
-where
-    P: ConnectionPool<NewConnectionConfig = C>,
-    M: ConnectionManager<ConnectionPool = P, NewConnectionConfig = C>,
-    C: NewConnectionConfig,
-{
-    sleep(sleep_duration).await;
-    send_wire_transaction_to_addr(connection_cache, &addr, wire_transaction).await
-}
 
 async fn send_wire_transaction_to_addr<P, M, C>(
     connection_cache: &ConnectionCache<P, M, C>,
@@ -544,150 +439,6 @@ where
         })
     }
 
-    #[cfg(feature = "spinner")]
-    pub async fn send_and_confirm_messages_with_spinner<T: Signers + ?Sized>(
-        &self,
-        messages: &[Message],
-        signers: &T,
-    ) -> Result<Vec<Option<TransactionError>>> {
-        let mut progress = SendTransactionProgress::default();
-        let progress_bar = spinner::new_progress_bar();
-        progress_bar.set_message("Setting up...");
-
-        let mut transactions = messages
-            .iter()
-            .enumerate()
-            .map(|(i, message)| (i, Transaction::new_unsigned(message.clone())))
-            .collect::<Vec<_>>();
-        progress.total_transactions = transactions.len();
-        let mut transaction_errors = vec![None; transactions.len()];
-        progress.block_height = self.rpc_client.get_block_height().await?;
-        for expired_blockhash_retries in (0..5).rev() {
-            let (blockhash, last_valid_block_height) = self
-                .rpc_client
-                .get_latest_blockhash_with_commitment(self.rpc_client.commitment())
-                .await?;
-            progress.last_valid_block_height = last_valid_block_height;
-
-            let mut pending_transactions = HashMap::new();
-            for (i, mut transaction) in transactions {
-                transaction.try_sign(signers, blockhash)?;
-                pending_transactions.insert(transaction.signatures[0], (i, transaction));
-            }
-
-            let mut last_resend = Instant::now() - TRANSACTION_RESEND_INTERVAL;
-            while progress.block_height <= progress.last_valid_block_height {
-                let num_transactions = pending_transactions.len();
-
-                // Periodically re-send all pending transactions
-                if Instant::now().duration_since(last_resend) > TRANSACTION_RESEND_INTERVAL {
-                    // Prepare futures for all transactions
-                    let mut futures = vec![];
-                    for (index, (_i, transaction)) in pending_transactions.values().enumerate() {
-                        let wire_transaction = serialize(transaction).unwrap();
-                        let leaders = self
-                            .leader_tpu_service
-                            .unique_leader_tpu_sockets(self.fanout_slots);
-                        futures.extend(send_wire_transaction_futures(
-                            &progress_bar,
-                            &progress,
-                            index,
-                            num_transactions,
-                            wire_transaction,
-                            leaders,
-                            &self.connection_cache,
-                        ));
-                    }
-
-                    // Start the process of sending them all
-                    let results = join_all(futures).await;
-
-                    progress.set_message_for_confirmed_transactions(
-                        &progress_bar,
-                        "Checking sent transactions",
-                    );
-                    for (index, (tx_results, (_i, transaction))) in results
-                        .chunks(self.fanout_slots as usize)
-                        .zip(pending_transactions.values())
-                        .enumerate()
-                    {
-                        // Only report an error if every future in the chunk errored
-                        if tx_results.iter().all(|r| r.is_err()) {
-                            progress.set_message_for_confirmed_transactions(
-                                &progress_bar,
-                                &format!(
-                                    "Resending failed transaction {} of {}",
-                                    index + 1,
-                                    num_transactions,
-                                ),
-                            );
-                            let _result = self.rpc_client.send_transaction(transaction).await.ok();
-                        }
-                    }
-                    last_resend = Instant::now();
-                }
-
-                // Wait for the next block before checking for transaction statuses
-                let mut block_height_refreshes = 10;
-                progress.set_message_for_confirmed_transactions(
-                    &progress_bar,
-                    &format!("Waiting for next block, {num_transactions} transactions pending..."),
-                );
-                let mut new_block_height = progress.block_height;
-                while progress.block_height == new_block_height && block_height_refreshes > 0 {
-                    sleep(Duration::from_millis(500)).await;
-                    new_block_height = self.rpc_client.get_block_height().await?;
-                    block_height_refreshes -= 1;
-                }
-                progress.block_height = new_block_height;
-
-                // Collect statuses for the transactions, drop those that are confirmed
-                let pending_signatures = pending_transactions.keys().cloned().collect::<Vec<_>>();
-                for pending_signatures_chunk in
-                    pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS)
-                {
-                    if let Ok(result) = self
-                        .rpc_client
-                        .get_signature_statuses(pending_signatures_chunk)
-                        .await
-                    {
-                        let statuses = result.value;
-                        for (signature, status) in
-                            pending_signatures_chunk.iter().zip(statuses.into_iter())
-                        {
-                            if let Some(status) = status {
-                                if status.satisfies_commitment(self.rpc_client.commitment()) {
-                                    if let Some((i, _)) = pending_transactions.remove(signature) {
-                                        progress.confirmed_transactions += 1;
-                                        if status.err.is_some() {
-                                            progress_bar
-                                                .println(format!("Failed transaction: {status:?}"));
-                                        }
-                                        transaction_errors[i] = status.err;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    progress.set_message_for_confirmed_transactions(
-                        &progress_bar,
-                        "Checking transaction status...",
-                    );
-                }
-
-                if pending_transactions.is_empty() {
-                    return Ok(transaction_errors);
-                }
-            }
-
-            transactions = pending_transactions.into_values().collect();
-            progress_bar.println(format!(
-                "Blockhash expired. {expired_blockhash_retries} retries remaining"
-            ));
-        }
-        Err(TpuSenderError::Custom("Max retries exceeded".into()))
-    }
-
     pub fn rpc_client(&self) -> &RpcClient {
         &self.rpc_client
     }
@@ -820,6 +571,7 @@ impl LeaderTpuService {
         }
     }
 
+    #[allow(dead_code)]
     pub fn estimated_current_slot(&self) -> Slot {
         self.recent_slots.estimated_current_slot()
     }
@@ -832,6 +584,7 @@ impl LeaderTpuService {
             .get_unique_leader_sockets(current_slot, fanout_slots)
     }
 
+    #[allow(dead_code)]
     pub fn leader_tpu_sockets(&self, fanout_slots: u64) -> Vec<SocketAddr> {
         let current_slot = self.recent_slots.estimated_current_slot();
         self.leader_tpu_cache
