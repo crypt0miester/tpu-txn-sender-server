@@ -54,7 +54,7 @@ const feePayer = await createKeyPairSignerFromBytes(
   Uint8Array.from(keypairJson),
 );
 console.log("feePayer", feePayer.address);
-const destination = address("2EGGxj2qbNAJNgLCPKca8sxZYetyTjnoRspTPjzN2D67");
+const destination = address(process.env.DESTINATION_ADDRESS || "2EGGxj2qbNAJNgLCPKca8sxZYetyTjnoRspTPjzN2D67");
 
 // Function to create and sign a transaction
 async function createAndSignTransaction() {
@@ -161,7 +161,7 @@ async function sendMultipleTransactions(count: number) {
 
 // Main function
 async function main() {
-  const numberOfTransactions = 1; // Number of transactions to send
+  const numberOfTransactions = 10; // Number of transactions to send
   await sendMultipleTransactions(numberOfTransactions);
   console.log("All transactions submitted successfully!");
 }
