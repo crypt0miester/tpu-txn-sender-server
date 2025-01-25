@@ -57,8 +57,21 @@ where
         self.tpu_client.try_send_transaction(transaction).await
     }
 
+
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail
+    pub async fn send_transaction_to_upcoming_leaders(
+        &self,
+        wire_transaction: Vec<u8>,
+    ) -> TransportResult<()> {
+        self.tpu_client
+            .send_transaction_to_upcoming_leaders(wire_transaction)
+            .await
+    }
+
+    /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
+    /// Returns the last error if all sends fail
+    #[allow(dead_code)]
     pub async fn try_send_wire_transaction(
         &self,
         wire_transaction: Vec<u8>,

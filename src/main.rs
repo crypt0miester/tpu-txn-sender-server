@@ -90,7 +90,7 @@ async fn handle_transaction(
 
         match state
             .tpu_client
-            .try_send_wire_transaction(request.txn.clone())
+            .send_transaction_to_upcoming_leaders(request.txn.clone())
             .await
         {
             Ok(_) => {

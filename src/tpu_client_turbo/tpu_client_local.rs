@@ -317,6 +317,24 @@ where
         self.try_send_wire_transaction(wire_transaction).await
     }
 
+    pub async fn send_transaction_to_upcoming_leaders(
+        &self,
+        wire_transaction: Vec<u8>,
+    ) -> TransportResult<()> {
+
+        let leaders = self
+            .leader_tpu_service
+            .unique_leader_tpu_sockets(self.fanout_slots);
+        for tpu_address in &leaders {
+            let cache = 
+            &self.connection_cache;
+            let conn = cache.get_nonblocking_connection(tpu_address);
+            conn.send_data(&wire_transaction).await?;
+        }
+
+        Ok(())
+    }
+
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail
     pub async fn try_send_wire_transaction(
@@ -356,6 +374,9 @@ where
                 std::io::Error::new(std::io::ErrorKind::Other, "No sends attempted").into()
             })
         } else {
+            info!(
+                "TRANSACTION SUCCESS"
+            );
             Ok(())
         }
     }
