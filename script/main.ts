@@ -152,7 +152,7 @@ async function sendMultipleTransactions(count: number) {
     transactions.push(signedTransaction);
   }
 
-  // submit all txns concurrently
+  // submit txns sequentially
   const submissionPromises = transactions.map(async (signedTransaction) => {
     await submitTransaction(getBase64EncodedWireTransaction(signedTransaction));
     // await sendTransactionWithoutConfirmingFactory({ rpc: client.rpc })(
