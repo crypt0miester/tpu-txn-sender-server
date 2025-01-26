@@ -39,7 +39,7 @@ import pretty from 'pino-pretty';
 const logger = pino(
   pretty({
     colorize: true,
-    translateTime: 'yyyy-mm-dd HH:MM:ss.l o',
+    translateTime: 'yyyy-mm-dd HH:MM:ss.l',
     ignore: 'pid,hostname',
     customPrettifiers: {
       time: (timestamp) => `[${timestamp}]`
@@ -99,6 +99,7 @@ async function createAndSignTransaction(index: number) {
           getTransferSolInstruction({
             source: feePayer,
             destination,
+            // adds uniqueness
             amount: 1_000 + index, // amount in lamports
           }),
         ],
@@ -120,18 +121,15 @@ async function submitTransaction(
     let url = batched
       ? "http://localhost:3001/send_batch"
       : "http://localhost:3001/send_txn";
-    let body = "";
-    if (isArray(transactionBytes)) {
-      body = JSON.stringify({
-        txns: transactionBytes.map((txnBytes) =>
-          Array.from(Buffer.from(txnBytes)),
-        ),
-      });
-    } else {
-      body = JSON.stringify({
+
+    const body = Array.isArray(transactionBytes)
+      ? JSON.stringify({
+        txns: transactionBytes.map((txnBytes) => Array.from(Buffer.from(txnBytes))),
+      })
+      : JSON.stringify({
         txn: Array.from(Buffer.from(transactionBytes)),
       });
-    }
+      
     const response = await fetch(url, {
       method: "POST",
       headers: {
