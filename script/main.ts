@@ -33,6 +33,19 @@ import {
   getSetLoadedAccountsDataSizeLimitInstruction,
 } from "@solana-program/compute-budget";
 import { isArray } from "util";
+import pino from 'pino';
+import pretty from 'pino-pretty';
+
+const logger = pino(
+  pretty({
+    colorize: true,
+    translateTime: 'yyyy-mm-dd HH:MM:ss.l o',
+    ignore: 'pid,hostname',
+    customPrettifiers: {
+      time: (timestamp) => `[${timestamp}]`
+    }
+  })
+);
 
 type Client = {
   rpc: Rpc<SolanaRpcApi>;
@@ -54,10 +67,10 @@ const keypairJson = await keypairFile.json();
 const feePayer = await createKeyPairSignerFromBytes(
   Uint8Array.from(keypairJson),
 );
-console.log("feePayer", feePayer.address);
+logger.info("payer: " + feePayer.address);
 const destination = address(
   process.env.DESTINATION_ADDRESS ||
-    "2EGGxj2qbNAJNgLCPKca8sxZYetyTjnoRspTPjzN2D67",
+  "2EGGxj2qbNAJNgLCPKca8sxZYetyTjnoRspTPjzN2D67",
 );
 
 // create and sign a transaction
@@ -86,7 +99,6 @@ async function createAndSignTransaction(index: number) {
           getTransferSolInstruction({
             source: feePayer,
             destination,
-            // adds uniqueness
             amount: 1_000 + index, // amount in lamports
           }),
         ],
@@ -127,16 +139,15 @@ async function submitTransaction(
       },
       body,
     });
-    // console.log(response)
     const result = await response.json();
 
     if (result.status === "error") {
       throw Error(result.error);
     }
-    console.log("submit result:", result);
+    logger.info({ result }, "txn submit result");
     return result;
   } catch (error) {
-    console.error("txn submit error:", error);
+    logger.error({ error }, "transaction submit error");
     throw error;
   }
 }
@@ -155,14 +166,8 @@ async function sendMultipleTransactions(count: number) {
   // submit txns sequentially
   const submissionPromises = transactions.map(async (signedTransaction) => {
     await submitTransaction(getBase64EncodedWireTransaction(signedTransaction));
-    // await sendTransactionWithoutConfirmingFactory({ rpc: client.rpc })(
-    //   signedTransaction,
-    //   {
-    //     commitment: "confirmed",
-    //   },
-    // );
     const signature = getSignatureFromTransaction(signedTransaction);
-    console.log("signature: https://solscan.io/tx/" + signature);
+    logger.info(`signature: https://solscan.io/tx/${signature}`);
 
     // confirm txn
     const getBlockHeightExceedencePromise =
@@ -176,7 +181,7 @@ async function sendMultipleTransactions(count: number) {
       getRecentSignatureConfirmationPromise,
       transaction: signedTransaction,
     });
-    console.log("txn confirmed");
+    logger.info("txn confirmed");
   });
 
   // submit txns batched
@@ -202,7 +207,7 @@ async function sendMultipleTransactionsBatched(count: number) {
 
   const submissionPromises = transactions.map(async (signedTransaction) => {
     const signature = getSignatureFromTransaction(signedTransaction);
-    console.log("signature: https://solscan.io/tx/" + signature);
+    logger.info(`signature: https://solscan.io/tx/${signature}`);
 
     // confirm txn
     const getBlockHeightExceedencePromise =
@@ -216,7 +221,7 @@ async function sendMultipleTransactionsBatched(count: number) {
       getRecentSignatureConfirmationPromise,
       transaction: signedTransaction,
     });
-    console.log("txn confirmed");
+    logger.info("txn confirmed");
   });
 
   // submit txns batched
@@ -231,10 +236,10 @@ async function main() {
 
   // sends txns batched in one request.
   await sendMultipleTransactionsBatched(numberOfTransactions);
-  console.log("txns submitted!");
+  logger.info("txns successfully sent");
 }
 
 main().catch((error) => {
-  console.error("Error in main function:", error);
+  logger.error({ error }, "error in main function");
   process.exit(1);
 });
