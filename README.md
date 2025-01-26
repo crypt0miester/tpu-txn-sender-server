@@ -1,67 +1,60 @@
 # Solana TPU Transaction Sender Server
 
 ## Overview
-A Rust-based Axum web server for submitting Solana transactions using a TPU (Transaction Processing Unit) client with retry logic.
+A Rust-based Axum web server for submitting Solana transactions using a TPU (Transaction Processing Unit) client with advanced retry mechanisms.
+
+## Architecture
+- **Server**: Rust (Axum)
+- **Client**: TypeScript
+- **Networking**: QUIC
+- **Transaction Handling**: Configurable retry strategy
 
 ## Features
-- Send Solana transactions via HTTP POST
+- HTTP endpoints for transaction submission
+- Single and batch transaction support
+- Comprehensive error handling
+- Detailed transaction processing logs
 - Configurable retry mechanism
-- Detailed transaction processing logging
-- Supports QUIC networking
 
-## Dependencies
-- Axum
-- Solana Client
-- Tokio
-- Tracing
+## Endpoints
+- `GET /`: Server time
+- `POST /send_txn`: Single transaction submission
+- `POST /send_batch`: Batch transaction submission
 
-## Server Endpoints
-- `GET /`: Returns current server time
-- `POST /send_txn`: Submit Solana transaction
+## Quick Start
 
-## Configuration
-Modify `rpc_url` and `ws_url` in `main()` with your Solana cluster endpoints.
+### Server Setup
+1. Install Rust and Cargo
+2. Set environment variables:
+   - `RPC_URL`: Solana RPC endpoint
+   - `WS_URL`: Solana WebSocket URL
+3. Run `cargo run`
 
-## TypeScript Test Client
-
+### TypeScript Client Example
 ```typescript
 async function submitTransaction(transactionBytes: Buffer) {
-  try {
-    const response = await fetch('http://localhost:3001/send_txn', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        txn: Array.from(transactionBytes)  // Convert Buffer to array
-      })
-    });
-
-    const result = await response.json();
-    console.log('Transaction Result:', result);
-    return result;
-  } catch (error) {
-    console.error('Transaction Submission Error:', error);
-    throw error;
-  }
+  const response = await fetch('http://localhost:3001/send_txn', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ txn: Array.from(transactionBytes) })
+  });
+  return response.json();
 }
-
-// Example usage
-const testTransaction = Buffer.from('your_serialized_transaction_bytes');
-submitTransaction(testTransaction);
 ```
 
-## Running the Server
-1. Ensure Rust and Cargo are installed
-2. Run `cargo run`
-
 ## Transaction Retry Strategy
-- Maximum 10 retries
-- Initial retry delay of 100ms
-- Exponential backoff recommended for production
+- Maximum retries: 10
+- Initial retry delay: 100ms
+- Exponential backoff recommended
 
 ## Logging
-Uses `tracing` for comprehensive logging with:
+Uses `tracing` for detailed logs including:
 - Timestamps
 - Thread IDs
-- File and line number information
+- Error context
+- Performance metrics
+
+## Performance Considerations
+- Utilizes QUIC for efficient networking
+- Configurable transaction processing
+- Supports both single and batch transactions
