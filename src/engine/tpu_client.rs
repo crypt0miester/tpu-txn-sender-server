@@ -1,20 +1,14 @@
-pub use connection_cache::ConnectionCache;
-use tpu_client_local::TpuClient as BackendTpuClient;
-use tpu_client_local_2::{Result, TpuClientConfig};
-pub mod connection_cache;
-pub mod tpu_client_local;
-pub mod tpu_client_local_2;
 use {
+    super::{
+        backend_tpu_client::BackendTpuClient, connection_cache::ConnectionCache, recent_leaders_slot::{Result, TpuClientConfig}
+    },
     solana_connection_cache::connection_cache::{
         ConnectionCache as BackendConnectionCache, ConnectionManager, ConnectionPool,
         NewConnectionConfig,
     },
     solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
     solana_rpc_client::nonblocking::rpc_client::RpcClient,
-    solana_sdk::{
-        transaction::Transaction,
-        transport::Result as TransportResult,
-    },
+    solana_sdk::{transaction::Transaction, transport::Result as TransportResult},
     std::sync::Arc,
 };
 
@@ -56,7 +50,6 @@ where
     pub async fn try_send_transaction(&self, transaction: &Transaction) -> TransportResult<()> {
         self.tpu_client.try_send_transaction(transaction).await
     }
-
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail

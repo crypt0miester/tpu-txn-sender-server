@@ -12,10 +12,10 @@ use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 use tower_http::trace::TraceLayer;
 use tracing::{error, info, warn};
-mod tpu_client_turbo;
+mod engine;
 use base64::{engine::general_purpose, Engine as _};
-use tpu_client_turbo::tpu_client_local_2::TpuClientConfig;
-use tpu_client_turbo::TpuClient;
+use engine::recent_leaders_slot::TpuClientConfig;
+use engine::tpu_client::TpuClient;
 
 struct AppState {
     tpu_client: Arc<TpuClient<QuicPool, QuicConnectionManager, QuicConfig>>,
@@ -97,15 +97,13 @@ async fn handle_transaction(
 
         match state
             .tpu_client
-            .try_send_wire_transaction(
-                match general_purpose::STANDARD.decode(&request.txn) {
-                    Ok(decoded_txn) => decoded_txn,
-                    Err(e) => {
-                        eprintln!("Failed to decode Base64 transaction: {}", e);
-                        vec![]
-                    }
-                },
-            )
+            .try_send_wire_transaction(match general_purpose::STANDARD.decode(&request.txn) {
+                Ok(decoded_txn) => decoded_txn,
+                Err(e) => {
+                    eprintln!("Failed to decode Base64 transaction: {}", e);
+                    vec![]
+                }
+            })
             .await
         {
             Ok(_) => {
@@ -164,7 +162,6 @@ async fn handle_transaction(
         .into_response()
 }
 
-
 async fn handle_transactions_batched(
     State(state): State<Arc<AppState>>,
     Json(request): Json<TransactionsRequest>,
@@ -183,21 +180,21 @@ async fn handle_transactions_batched(
         attempt += 1;
         let attempt_start = Instant::now();
         match state
-        .tpu_client
-        .try_send_wire_transaction_batch(
-            request.txns.iter()
-                .filter_map(|txn| {
-                    match general_purpose::STANDARD.decode(txn) {
+            .tpu_client
+            .try_send_wire_transaction_batch(
+                request
+                    .txns
+                    .iter()
+                    .filter_map(|txn| match general_purpose::STANDARD.decode(txn) {
                         Ok(decoded_txn) => Some(decoded_txn),
                         Err(e) => {
                             eprintln!("Failed to decode Base64 transaction: {}", e);
                             None
                         }
-                    }
-                })
-                .collect::<Vec<_>>()
-        )
-        .await
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .await
         {
             Ok(_) => {
                 let total_time = start_time.elapsed();
@@ -254,7 +251,6 @@ async fn handle_transactions_batched(
     )
         .into_response()
 }
-
 
 #[derive(Serialize)]
 struct TransactionResponse {
