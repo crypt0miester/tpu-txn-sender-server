@@ -8,7 +8,7 @@ use {
             NewConnectionConfig,
         },
     },
-    solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool},
+    crate::quik::{QuicConfig, QuicConnectionManager, QuicPool},
     solana_sdk::{
         pubkey::Pubkey, quic::NotifyKeyUpdate, signature::Keypair,
         transport::Result as TransportResult,

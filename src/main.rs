@@ -1,3 +1,4 @@
+use crate::quik::{QuicConfig, QuicConnectionManager, QuicPool};
 use axum::{
     extract::State,
     http::StatusCode,
@@ -7,7 +8,6 @@ use axum::{
 };
 use chrono::Local;
 use serde::{Deserialize, Serialize};
-use solana_quic_client::{QuicConfig, QuicConnectionManager, QuicPool};
 use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 use tower_http::trace::TraceLayer;
@@ -16,6 +16,7 @@ mod engine;
 use base64::{engine::general_purpose, Engine as _};
 use engine::recent_leaders_slot::TpuClientConfig;
 use engine::tpu_client::TpuClient;
+mod quik;
 
 struct AppState {
     tpu_client: Arc<TpuClient<QuicPool, QuicConnectionManager, QuicConfig>>,
@@ -31,10 +32,10 @@ struct TransactionsRequest {
     txns: Vec<Vec<u8>>,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() {
     dotenv::dotenv().ok();
-
+    rustls::crypto::ring::default_provider().install_default().expect("Failed to install rustls crypto provider");
     tracing_subscriber::fmt()
         .with_timer(tracing_subscriber::fmt::time::time())
         .with_target(false)

@@ -129,7 +129,7 @@ async function submitTransaction(
       : JSON.stringify({
         txn: Array.from(Buffer.from(transactionBytes)),
       });
-      
+
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -227,13 +227,13 @@ async function sendMultipleTransactionsBatched(count: number) {
 }
 
 async function main() {
-  const numberOfTransactions = 4; // no. of transactions to send
+  const numberOfTransactions = 1; // no. of transactions to send
 
   // sends them one by one in a loop
-  // await sendMultipleTransactions(numberOfTransactions);
+  await sendMultipleTransactions(numberOfTransactions);
 
   // sends txns batched in one request.
-  await sendMultipleTransactionsBatched(numberOfTransactions);
+  // await sendMultipleTransactionsBatched(numberOfTransactions);
   logger.info("txns successfully sent");
 }
 
