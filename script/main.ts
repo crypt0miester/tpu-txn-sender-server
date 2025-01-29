@@ -67,7 +67,7 @@ const keypairJson = await keypairFile.json();
 const feePayer = await createKeyPairSignerFromBytes(
   Uint8Array.from(keypairJson),
 );
-logger.info("payer: " + feePayer.address);
+logger.info("payer: " + feePayer.address.slice(0,10));
 const destination = address(
   process.env.DESTINATION_ADDRESS ||
   "2EGGxj2qbNAJNgLCPKca8sxZYetyTjnoRspTPjzN2D67",
@@ -174,7 +174,7 @@ async function sendMultipleTransactions(count: number) {
       createRecentSignatureConfirmationPromiseFactory(client);
 
     await waitForRecentTransactionConfirmation({
-      commitment: "confirmed",
+      commitment: "processed",
       getBlockHeightExceedencePromise,
       getRecentSignatureConfirmationPromise,
       transaction: signedTransaction,
@@ -203,7 +203,7 @@ async function sendMultipleTransactionsBatched(count: number) {
     true,
   );
 
-  const submissionPromises = transactions.map(async (signedTransaction) => {
+  const submissionPromises = transactions.map(async (signedTransaction, index) => {
     const signature = getSignatureFromTransaction(signedTransaction);
     logger.info(`signature: https://solscan.io/tx/${signature}`);
 
@@ -219,7 +219,7 @@ async function sendMultipleTransactionsBatched(count: number) {
       getRecentSignatureConfirmationPromise,
       transaction: signedTransaction,
     });
-    logger.info("txn confirmed");
+    logger.info("txn confirmed: " + index);
   });
 
   // submit txns batched
@@ -230,10 +230,10 @@ async function main() {
   const numberOfTransactions = 1; // no. of transactions to send
 
   // sends them one by one in a loop
-  await sendMultipleTransactions(numberOfTransactions);
+  // await sendMultipleTransactions(numberOfTransactions);
 
   // sends txns batched in one request.
-  // await sendMultipleTransactionsBatched(numberOfTransactions);
+  await sendMultipleTransactionsBatched(numberOfTransactions);
   logger.info("txns successfully sent");
 }
 

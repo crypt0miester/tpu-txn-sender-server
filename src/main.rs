@@ -162,13 +162,12 @@ async fn handle_transaction(
     )
         .into_response()
 }
-
 async fn handle_transactions_batched(
     State(state): State<Arc<AppState>>,
     Json(request): Json<TransactionsRequest>,
 ) -> impl IntoResponse {
     let start_time = Instant::now();
-    let mut attempt = 0;
+    let mut overall_attempt = 0;
     let mut last_error = None;
     let retry_delay = Duration::from_millis(INITIAL_RETRY_DELAY_MS);
 
@@ -177,80 +176,104 @@ async fn handle_transactions_batched(
         "Received transactions request"
     );
 
-    while attempt < MAX_RETRIES {
-        attempt += 1;
-        let attempt_start = Instant::now();
-        match state
-            .tpu_client
-            .try_send_wire_transaction_batch(
-                request
-                    .txns
-                    .iter()
-                    .filter_map(|txn| match general_purpose::STANDARD.decode(txn) {
-                        Ok(decoded_txn) => Some(decoded_txn),
-                        Err(e) => {
-                            eprintln!("Failed to decode Base64 transaction: {}", e);
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-            .await
-        {
-            Ok(_) => {
-                let total_time = start_time.elapsed();
-                info!(
-                    total_time_ms = total_time.as_millis(),
-                    successful_attempt = attempt,
-                    "Transaction processed successfully after retries"
-                );
-                return Json(TransactionResponse {
-                    status: "success".to_string(),
-                    error: None,
-                    processing_time_ms: total_time.as_millis() as u64,
-                    attempts: attempt,
-                })
-                .into_response();
+    // Decode all transactions first
+    let decoded_txns: Vec<_> = request
+        .txns
+        .iter()
+        .filter_map(|txn| match general_purpose::STANDARD.decode(txn) {
+            Ok(decoded_txn) => Some(decoded_txn),
+            Err(e) => {
+                eprintln!("Failed to decode Base64 transaction: {}", e);
+                None
             }
-            Err(err) => {
-                let attempt_time = attempt_start.elapsed();
-                warn!(
-                    error = ?err,
-                    attempt = attempt,
-                    attempt_time_ms = attempt_time.as_millis(),
-                    "Transaction attempt failed, retrying"
-                );
-                last_error = Some(err);
+        })
+        .collect();
 
-                if attempt < MAX_RETRIES {
+    // Process in batches of 10
+    for (batch_index, batch) in decoded_txns.chunks(10).enumerate() {
+        let mut batch_attempt = 0;
+        let batch_start_time = Instant::now();
+
+        info!(
+            batch_index = batch_index,
+            batch_size = batch.len(),
+            "Processing transaction batch"
+        );
+
+        while batch_attempt < MAX_RETRIES {
+            batch_attempt += 1;
+            overall_attempt += 1;
+            let attempt_start = Instant::now();
+
+            match state
+                .tpu_client
+                .try_send_wire_transaction_batch(batch.to_vec())
+                .await
+            {
+                Ok(_) => {
+                    let batch_time = batch_start_time.elapsed();
                     info!(
-                        retry_delay_ms = retry_delay.as_millis(),
-                        "Waiting before next retry"
+                        batch_index = batch_index,
+                        batch_time_ms = batch_time.as_millis(),
+                        successful_attempt = batch_attempt,
+                        "Batch processed successfully"
                     );
+                    break;
+                }
+                Err(err) => {
+                    let attempt_time = attempt_start.elapsed();
+                    warn!(
+                        error = ?err,
+                        batch_index = batch_index,
+                        attempt = batch_attempt,
+                        attempt_time_ms = attempt_time.as_millis(),
+                        "Batch attempt failed, retrying"
+                    );
+                    last_error = Some(err);
+
+                    if batch_attempt < MAX_RETRIES {
+                        info!(
+                            retry_delay_ms = retry_delay.as_millis(),
+                            "Waiting before next retry"
+                        );
+                        tokio::time::sleep(retry_delay).await;
+                    } else {
+                        error!(
+                            batch_index = batch_index,
+                            "All retry attempts failed for batch"
+                        );
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(TransactionResponse {
+                                status: "error".to_string(),
+                                error: Some(format!("Batch {} failed after {} attempts: {:?}", 
+                                    batch_index, batch_attempt, last_error)),
+                                processing_time_ms: start_time.elapsed().as_millis() as u64,
+                                attempts: overall_attempt,
+                            }),
+                        )
+                            .into_response();
+                    }
                 }
             }
         }
     }
 
-    // if we get here, all retries failed
+    // If we get here, all batches succeeded
     let total_time = start_time.elapsed();
-    error!(
-        error = ?last_error,
+    info!(
         total_time_ms = total_time.as_millis(),
-        attempts = attempt,
-        "All retry attempts failed"
+        total_attempts = overall_attempt,
+        "All batches processed successfully"
     );
 
-    (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(TransactionResponse {
-            status: "error".to_string(),
-            error: last_error.map(|e| e.to_string()),
-            processing_time_ms: total_time.as_millis() as u64,
-            attempts: attempt,
-        }),
-    )
-        .into_response()
+    Json(TransactionResponse {
+        status: "success".to_string(),
+        error: None,
+        processing_time_ms: total_time.as_millis() as u64,
+        attempts: overall_attempt,
+    })
+    .into_response()
 }
 
 #[derive(Serialize)]

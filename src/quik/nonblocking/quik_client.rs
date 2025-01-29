@@ -33,7 +33,9 @@ use {
 };
 
 pub const QUIC_MAX_TIMEOUT: Duration = Duration::from_millis(200);
-pub const QUIC_CONNECTION_HANDSHAKE_TIMEOUT: Duration = Duration::from_millis(750);
+pub const INITIAL_QUIC_CONNECTION_HANDSHAKE_TIMEOUT: Duration = Duration::from_millis(500);
+pub const QUIC_CONNECTION_HANDSHAKE_TIMEOUT: Duration = Duration::from_millis(300);
+pub const RECONNECTING_QUIC_CONNECTION_HANDSHAKE_TIMEOUT: Duration = Duration::from_millis(3000);
 
 #[derive(Debug)]
 pub struct SkipServerVerification(Arc<rustls::crypto::CryptoProvider>);
@@ -210,7 +212,7 @@ impl QuicNewConnection {
 
         let connecting = endpoint.connect(addr, "connect")?;
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        if let Ok(connecting_result) = timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await
+        if let Ok(connecting_result) = timeout(INITIAL_QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await
         {
             if connecting_result.is_err() {
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
@@ -262,7 +264,7 @@ impl QuicNewConnection {
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
 
                 if let Ok(connecting_result) =
-                    timeout(QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await
+                    timeout(RECONNECTING_QUIC_CONNECTION_HANDSHAKE_TIMEOUT, connecting).await
                 {
                     connecting_result?
                 } else {
